@@ -1270,21 +1270,21 @@ def _fetch_market_quadrant() -> dict:
                     break
 
         # ── Phase duration: consecutive weeks in same overall ─────
+        # NNH not recomputed per week (too expensive) — use pct50 threshold only
         phase_weeks = 0
-        for i in range(1, min(53, len(closes) // 5)):
+        max_w = min(52, len(closes) // 5)
+        for i in range(1, max_w):
             idx = -(i * 5)
-            if abs(idx) > len(closes):
+            if abs(idx) >= len(closes):
                 break
-            c   = closes.iloc[idx]
+            c    = closes.iloc[idx]
             p10  = float((c > sma10.iloc[idx]).sum()  / n * 100)
             p50  = float((c > sma50.iloc[idx]).sum()  / n * 100)
             p200 = float((c > sma200.iloc[idx]).sum() / n * 100)
             idx2 = idx - 20
-            mom_p = p50 - float((closes.iloc[idx2] > sma50.iloc[idx2]).sum() / n * 100) if abs(idx2) <= len(closes) else 0
-            nnh_p = _nnh(252)  # use current as proxy (expensive to recompute)
-            b_p   = "BULL" if p200 >= 50 else "BEAR"
-            t_p   = "UP"   if p50  >= 50 and nnh_p > 0 else "DOWN"
-            bulls_p = sum([b_p == "BULL", t_p == "UP", p10 >= 50, mom_p > 0])
+            mom_p = (p50 - float((closes.iloc[idx2] > sma50.iloc[idx2]).sum() / n * 100)
+                     if abs(idx2) < len(closes) else 0)
+            bulls_p = sum([p200 >= 50, p50 >= 50, p10 >= 50, mom_p > 0])
             ov_p    = "INVEST" if bulls_p >= 3 else "SELECTIVE" if bulls_p == 2 else "CASH"
             if ov_p == overall:
                 phase_weeks += 1
