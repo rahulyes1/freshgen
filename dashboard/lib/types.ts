@@ -260,6 +260,13 @@ export interface AnnouncementsResponse {
   days: number
 }
 
+export interface UpgradeCondition {
+  metric: string
+  current: number
+  needs: number
+  gap: number
+}
+
 export interface MarketQuadrant {
   bias: "BULL" | "BEAR"
   trend: "UP" | "DOWN"
@@ -274,9 +281,15 @@ export interface MarketQuadrant {
   above_50: number
   above_200: number
   total: number
+  nnh_20: number
+  nnh_65: number
+  nnh_52w: number
   new_highs: number
   new_lows: number
   overall: "INVEST" | "SELECTIVE" | "CASH"
+  phase_weeks: number
+  thrust_detected: boolean
+  to_upgrade: { to: string; conditions: UpgradeCondition[] }[]
   updated_at: string
 }
 

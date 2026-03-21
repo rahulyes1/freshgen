@@ -1198,6 +1198,7 @@ def _fetch_market_quadrant() -> dict:
         if n == 0:
             return {}
 
+        # ── Moving averages ──────────────────────────────────────
         sma10  = closes.rolling(10).mean()
         sma50  = closes.rolling(50).mean()
         sma200 = closes.rolling(200).mean()
@@ -1211,36 +1212,135 @@ def _fetch_market_quadrant() -> dict:
         pct50  = round(above_50  / n * 100, 1)
         pct200 = round(above_200 / n * 100, 1)
 
-        # 52-week highs / lows
-        high52 = closes.rolling(252, min_periods=200).max().iloc[-1]
-        low52  = closes.rolling(252, min_periods=200).min().iloc[-1]
-        new_highs = int((latest >= high52 * 0.98).sum())
-        new_lows  = int((latest <= low52  * 1.02).sum())
+        # ── Net New Highs (NNH) — Nitin uses 20d, 65d, 52w ──────
+        def _nnh(window: int) -> int:
+            rh = closes.rolling(window, min_periods=window // 2).max()
+            rl = closes.rolling(window, min_periods=window // 2).min()
+            return int((latest >= rh.iloc[-1] * 0.99).sum()) - int((latest <= rl.iloc[-1] * 1.01).sum())
 
-        # Momentum: pct_above_50 now vs 20 sessions ago
-        above_50_20d = float((closes.iloc[-20] > sma50.iloc[-20]).sum() / n * 100)
-        momentum_change = round(pct50 - above_50_20d, 1)
+        nnh_20  = _nnh(20)
+        nnh_65  = _nnh(65)
+        nnh_52w = _nnh(252)
 
-        # Quadrant labels
-        bias     = "BULL"    if pct200 >= 50 else "BEAR"
-        trend    = "UP"      if pct50  >= 50 else "DOWN"
-        swing    = ("HOT"  if pct10 >= 70 else
-                    "WARM" if pct10 >= 50 else
-                    "COOL" if pct10 >= 30 else "COLD")
-        momentum = "RISING" if momentum_change > 0 else "FALLING"
+        # 52-week raw counts for display
+        high52    = closes.rolling(252, min_periods=200).max().iloc[-1]
+        low52     = closes.rolling(252, min_periods=200).min().iloc[-1]
+        new_highs = int((latest >= high52 * 0.99).sum())
+        new_lows  = int((latest <= low52  * 1.01).sum())
 
-        bulls = sum([bias == "BULL", trend == "UP", pct10 >= 50, momentum == "RISING"])
+        # ── Weekly breadth series (last 13 weeks) ────────────────
+        weekly_p50: list[float] = []
+        for i in range(13, 0, -1):
+            idx = -(i * 5)
+            if abs(idx) > len(closes):
+                continue
+            c = closes.iloc[idx]
+            s = sma50.iloc[idx]
+            weekly_p50.append(float((c > s).sum() / n * 100))
+
+        # ── Momentum: ROC vs its own 9-week SMA (like Nitin) ─────
+        if len(weekly_p50) >= 5:
+            roc_series = [weekly_p50[i] - weekly_p50[i - 4] for i in range(4, len(weekly_p50))]
+            mom_raw  = roc_series[-1]
+            mom_ma9  = sum(roc_series) / len(roc_series)
+            momentum_change = round(mom_raw, 1)
+            momentum = "RISING" if mom_raw > mom_ma9 else "FALLING"
+        else:
+            fallback = float((closes.iloc[-20] > sma50.iloc[-20]).sum() / n * 100)
+            momentum_change = round(pct50 - fallback, 1)
+            momentum = "RISING" if momentum_change > 0 else "FALLING"
+
+        # ── Swing Confidence 0–100 (composite like Nitin) ────────
+        sc = min(round(pct10 * 0.40), 40)   # 0–40 from short-term breadth
+        sc += 20 if nnh_20  > 0 else 0       # +20 if 20-day NNH positive
+        sc += 20 if nnh_65  > 0 else 0       # +20 if 65-day NNH positive
+        sc += 20 if momentum == "RISING" else 0  # +20 if momentum improving
+        swing_confidence = sc
+
+        # ── Quadrant labels ───────────────────────────────────────
+        bias  = "BULL" if pct200 >= 50 else "BEAR"
+        # Trend: needs both 50-SMA breadth AND 52w NNH positive (Nitin's rule)
+        trend = "UP" if pct50 >= 50 and nnh_52w > 0 else "DOWN"
+        swing = ("HOT"  if pct10 >= 70 else
+                 "WARM" if pct10 >= 50 else
+                 "COOL" if pct10 >= 30 else "COLD")
+
+        bulls   = sum([bias == "BULL", trend == "UP", pct10 >= 50, momentum == "RISING"])
         overall = "INVEST" if bulls >= 3 else "SELECTIVE" if bulls == 2 else "CASH"
+
+        # ── Breadth Thrust (Zweig-style) ──────────────────────────
+        # Swing breadth < 25% any time in last 10 sessions → now > 40%
+        thrust = False
+        if pct10 > 40:
+            for i in range(2, min(12, len(closes))):
+                pp = float((closes.iloc[-i] > sma10.iloc[-i]).sum() / n * 100)
+                if pp < 25:
+                    thrust = True
+                    break
+
+        # ── Phase duration: consecutive weeks in same overall ─────
+        phase_weeks = 0
+        for i in range(1, min(53, len(weekly_p50) + 1)):
+            idx = -(i * 5)
+            if abs(idx) > len(closes):
+                break
+            c   = closes.iloc[idx]
+            p10  = float((c > sma10.iloc[idx]).sum()  / n * 100)
+            p50  = float((c > sma50.iloc[idx]).sum()  / n * 100)
+            p200 = float((c > sma200.iloc[idx]).sum() / n * 100)
+            idx2 = idx - 20
+            mom_p = p50 - float((closes.iloc[idx2] > sma50.iloc[idx2]).sum() / n * 100) if abs(idx2) <= len(closes) else 0
+            nnh_p = _nnh(252)  # use current as proxy (expensive to recompute)
+            b_p   = "BULL" if p200 >= 50 else "BEAR"
+            t_p   = "UP"   if p50  >= 50 and nnh_p > 0 else "DOWN"
+            bulls_p = sum([b_p == "BULL", t_p == "UP", p10 >= 50, mom_p > 0])
+            ov_p    = "INVEST" if bulls_p >= 3 else "SELECTIVE" if bulls_p == 2 else "CASH"
+            if ov_p == overall:
+                phase_weeks += 1
+            else:
+                break
+
+        # ── What Would Change This ────────────────────────────────
+        to_upgrade: list[dict] = []
+        if overall in ("CASH", "SELECTIVE"):
+            target = "INVEST" if overall == "SELECTIVE" else "SELECTIVE"
+            conditions = []
+            if pct10 < 50:
+                conditions.append({"metric": "Swing breadth (10-SMA)", "current": pct10,
+                                    "needs": 50.0, "gap": round(50 - pct10, 1)})
+            if momentum == "FALLING":
+                conditions.append({"metric": "Momentum", "current": momentum_change,
+                                    "needs": 0.0, "gap": round(-momentum_change, 1) if momentum_change < 0 else 0})
+            if conditions:
+                to_upgrade.append({"to": target, "conditions": conditions})
+
+        if overall == "CASH":
+            invest_conds = []
+            if pct200 < 50:
+                invest_conds.append({"metric": "Bias (200-SMA breadth)", "current": pct200,
+                                     "needs": 50.0, "gap": round(50 - pct200, 1)})
+            if pct50 < 50:
+                invest_conds.append({"metric": "Trend (50-SMA breadth)", "current": pct50,
+                                     "needs": 50.0, "gap": round(50 - pct50, 1)})
+            if nnh_52w <= 0:
+                invest_conds.append({"metric": "52-week Net New Highs", "current": float(nnh_52w),
+                                     "needs": 1.0, "gap": float(1 - nnh_52w)})
+            if invest_conds:
+                to_upgrade.append({"to": "INVEST", "conditions": invest_conds})
 
         result = {
             "bias": bias, "trend": trend, "swing": swing, "momentum": momentum,
-            "swing_confidence": round(pct10),
+            "swing_confidence": swing_confidence,
             "momentum_change": momentum_change,
             "pct_above_10": pct10, "pct_above_50": pct50, "pct_above_200": pct200,
             "above_10": above_10, "above_50": above_50, "above_200": above_200,
             "total": n,
+            "nnh_20": nnh_20, "nnh_65": nnh_65, "nnh_52w": nnh_52w,
             "new_highs": new_highs, "new_lows": new_lows,
             "overall": overall,
+            "phase_weeks": phase_weeks,
+            "thrust_detected": thrust,
+            "to_upgrade": to_upgrade,
             "updated_at": datetime.now(pytz.timezone("Asia/Kolkata")).isoformat(),
         }
         _quadrant_cache = result
