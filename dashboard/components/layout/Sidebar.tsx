@@ -1,7 +1,7 @@
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart2, TrendingUp, BookOpen, Grid, Activity, PenLine, Eye, FlaskConical, Network, Bell } from "lucide-react"
+import { BarChart2, TrendingUp, BookOpen, Grid, Activity, PenLine, Eye, FlaskConical, Network, Bell, Layers } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const nav = [
@@ -12,6 +12,7 @@ const nav = [
   { href: "/paper",        label: "Paper Trades", icon: FlaskConical },
   { href: "/backtest",       label: "Backtest",       icon: BarChart2    },
   { href: "/announcements",  label: "Announcements",  icon: Bell         },
+  { href: "/quadrant",       label: "Market Quadrant", icon: Layers       },
   { href: "/sectors",        label: "Sectors",        icon: Grid         },
   { href: "/architecture",   label: "System Map",     icon: Network      },
 ]

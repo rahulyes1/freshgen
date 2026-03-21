@@ -260,6 +260,26 @@ export interface AnnouncementsResponse {
   days: number
 }
 
+export interface MarketQuadrant {
+  bias: "BULL" | "BEAR"
+  trend: "UP" | "DOWN"
+  swing: "HOT" | "WARM" | "COOL" | "COLD"
+  momentum: "RISING" | "FALLING"
+  swing_confidence: number
+  momentum_change: number
+  pct_above_10: number
+  pct_above_50: number
+  pct_above_200: number
+  above_10: number
+  above_50: number
+  above_200: number
+  total: number
+  new_highs: number
+  new_lows: number
+  overall: "INVEST" | "SELECTIVE" | "CASH"
+  updated_at: string
+}
+
 export interface ScanHistoryEntry {
   id: number
   scan_date: string

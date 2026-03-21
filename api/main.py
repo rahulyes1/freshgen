@@ -1170,3 +1170,93 @@ async def sector_performance():
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(executor, _fetch_sector_performance)
     return {"sectors": data, "count": len(data)}
+
+
+# ── Market Quadrant (breadth-based) ────────────────────────────
+
+_quadrant_cache: dict = {}
+_quadrant_cache_ts: float = 0.0
+_QUADRANT_TTL = 3600  # 1 hour
+
+
+def _fetch_market_quadrant() -> dict:
+    global _quadrant_cache, _quadrant_cache_ts
+    if _quadrant_cache and (time.time() - _quadrant_cache_ts) < _QUADRANT_TTL:
+        return _quadrant_cache
+
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from nifty500_universe import get_nifty500
+        import yfinance as yf
+
+        tickers = get_nifty500()
+        closes = yf.download(tickers, period="1y", auto_adjust=True, progress=False)["Close"]
+        closes = closes.dropna(axis=1, how="all")
+
+        n = len(closes.columns)
+        if n == 0:
+            return {}
+
+        sma10  = closes.rolling(10).mean()
+        sma50  = closes.rolling(50).mean()
+        sma200 = closes.rolling(200).mean()
+
+        latest = closes.iloc[-1]
+        above_10  = int((latest > sma10.iloc[-1]).sum())
+        above_50  = int((latest > sma50.iloc[-1]).sum())
+        above_200 = int((latest > sma200.iloc[-1]).sum())
+
+        pct10  = round(above_10  / n * 100, 1)
+        pct50  = round(above_50  / n * 100, 1)
+        pct200 = round(above_200 / n * 100, 1)
+
+        # 52-week highs / lows
+        high52 = closes.rolling(252, min_periods=200).max().iloc[-1]
+        low52  = closes.rolling(252, min_periods=200).min().iloc[-1]
+        new_highs = int((latest >= high52 * 0.98).sum())
+        new_lows  = int((latest <= low52  * 1.02).sum())
+
+        # Momentum: pct_above_50 now vs 20 sessions ago
+        above_50_20d = float((closes.iloc[-20] > sma50.iloc[-20]).sum() / n * 100)
+        momentum_change = round(pct50 - above_50_20d, 1)
+
+        # Quadrant labels
+        bias     = "BULL"    if pct200 >= 50 else "BEAR"
+        trend    = "UP"      if pct50  >= 50 else "DOWN"
+        swing    = ("HOT"  if pct10 >= 70 else
+                    "WARM" if pct10 >= 50 else
+                    "COOL" if pct10 >= 30 else "COLD")
+        momentum = "RISING" if momentum_change > 0 else "FALLING"
+
+        bulls = sum([bias == "BULL", trend == "UP", pct10 >= 50, momentum == "RISING"])
+        overall = "INVEST" if bulls >= 3 else "SELECTIVE" if bulls == 2 else "CASH"
+
+        result = {
+            "bias": bias, "trend": trend, "swing": swing, "momentum": momentum,
+            "swing_confidence": round(pct10),
+            "momentum_change": momentum_change,
+            "pct_above_10": pct10, "pct_above_50": pct50, "pct_above_200": pct200,
+            "above_10": above_10, "above_50": above_50, "above_200": above_200,
+            "total": n,
+            "new_highs": new_highs, "new_lows": new_lows,
+            "overall": overall,
+            "updated_at": datetime.now(pytz.timezone("Asia/Kolkata")).isoformat(),
+        }
+        _quadrant_cache = result
+        _quadrant_cache_ts = time.time()
+        return result
+
+    except Exception as e:
+        print(f"[quadrant] Error: {e}")
+        return {}
+
+
+@app.get("/market-quadrant")
+async def get_market_quadrant():
+    """Nifty 500 breadth-based market quadrant. Cached 1 h."""
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(executor, _fetch_market_quadrant)
+    if not data:
+        raise HTTPException(status_code=503, detail="Could not compute market quadrant")
+    return data

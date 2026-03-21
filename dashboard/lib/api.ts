@@ -133,6 +133,12 @@ export async function fetchAnnouncements(days = 7): Promise<import("./types").An
   return request(`/announcements?days=${days}`)
 }
 
+// ── Market Quadrant ───────────────────────────────────────────
+
+export async function fetchMarketQuadrant(): Promise<import("./types").MarketQuadrant> {
+  return request("/market-quadrant")
+}
+
 // ── Health ────────────────────────────────────────────────────
 
 export async function fetchHealth(): Promise<import("./types").HealthResponse> {

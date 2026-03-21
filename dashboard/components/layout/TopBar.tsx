@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { RefreshCw, Wifi, WifiOff, TrendingUp, TrendingDown } from "lucide-react"
 import { fetchHealth } from "@/lib/api"
 import type { HealthResponse } from "@/lib/types"
@@ -40,21 +41,21 @@ export default function TopBar() {
       <span className="font-mono">{time}</span>
       <div className="flex items-center gap-4">
 
-        {/* Market regime */}
+        {/* Market Quadrant quick signal */}
         {health && (
-          <span className="flex items-center gap-1.5">
+          <Link href="/quadrant" className="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
             {health.market_bullish
               ? <TrendingUp size={11} style={{ color: "var(--green)" }} />
               : <TrendingDown size={11} style={{ color: "var(--red)" }} />}
             <span style={{ color: health.market_bullish ? "var(--green)" : "var(--red)" }}>
-              {health.market_bullish ? "Bull market" : "Bear market"}
+              {health.market_bullish ? "Bull phase" : "Bear phase"}
             </span>
             {health.nifty500_price && (
               <span style={{ color: "var(--text-muted)" }}>
                 · N500: {health.nifty500_price.toLocaleString("en-IN")}
               </span>
             )}
-          </span>
+          </Link>
         )}
 
         {/* Scheduler */}
