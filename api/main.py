@@ -1271,7 +1271,7 @@ def _fetch_market_quadrant() -> dict:
 
         # ── Phase duration: consecutive weeks in same overall ─────
         phase_weeks = 0
-        for i in range(1, min(53, len(weekly_p50) + 1)):
+        for i in range(1, min(53, len(closes) // 5)):
             idx = -(i * 5)
             if abs(idx) > len(closes):
                 break
@@ -1341,6 +1341,15 @@ def _fetch_market_quadrant() -> dict:
     except Exception as e:
         print(f"[quadrant] Error: {e}")
         return {}
+
+
+@app.post("/market-quadrant/refresh")
+async def refresh_market_quadrant():
+    """Force-clear the quadrant cache so next GET recomputes fresh."""
+    global _quadrant_cache, _quadrant_cache_ts
+    _quadrant_cache = {}
+    _quadrant_cache_ts = 0.0
+    return {"cleared": True}
 
 
 @app.get("/market-quadrant")

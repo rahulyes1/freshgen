@@ -1,7 +1,7 @@
 "use client"
 import useSWR from "swr"
 import { RefreshCw, ArrowUp, ArrowDown, Zap } from "lucide-react"
-import { fetchMarketQuadrant } from "@/lib/api"
+import { fetchMarketQuadrant, refreshMarketQuadrant } from "@/lib/api"
 import type { MarketQuadrant } from "@/lib/types"
 
 // ── Config ────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export default function QuadrantPage() {
             Nifty 500 breadth · Bias / Trend / Swing / Momentum · inspired by Nitin's framework · refreshes every 1 h
           </p>
         </div>
-        <button onClick={() => mutate()}
+        <button onClick={async () => { await refreshMarketQuadrant(); mutate() }}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs"
                 style={{ backgroundColor: "rgba(48,54,61,0.6)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
           <RefreshCw size={12} className={isLoading ? "animate-spin" : ""} />
@@ -280,14 +280,14 @@ export default function QuadrantPage() {
           </div>
 
           {/* ── What Would Change This ── */}
-          {q.to_upgrade.length > 0 && (
+          {(q.to_upgrade?.length ?? 0) > 0 && (
             <div className="rounded-xl overflow-hidden"
                  style={{ border: "1px solid var(--border)" }}>
               <div className="px-4 py-3 text-xs font-semibold uppercase tracking-widest"
                    style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
                 What Would Change This Signal
               </div>
-              {q.to_upgrade.map((block) => (
+              {(q.to_upgrade ?? []).map((block) => (
                 <div key={block.to}>
                   <div className="px-4 py-2 text-xs font-semibold"
                        style={{ backgroundColor: "rgba(48,54,61,0.3)", color: OVERALL[block.to as keyof typeof OVERALL]?.color ?? "var(--text-primary)" }}>
