@@ -7,6 +7,9 @@ on:
     # 3:45 PM IST = 10:15 AM UTC  (post-market close)
     - cron: '15 10 * * 1-5'
   workflow_dispatch:   # allow manual trigger from GitHub UI
+  push:
+    branches: [master]
+    paths: ['.github/workflows/scanner.yml']  # only runs when this file changes
 
 jobs:
   scan:
