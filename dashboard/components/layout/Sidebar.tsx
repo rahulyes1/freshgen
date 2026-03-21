@@ -11,7 +11,7 @@ const nav = [
   { href: "/watchlist",    label: "Watchlist",    icon: Eye          },
   { href: "/paper",        label: "Paper Trades", icon: FlaskConical },
   { href: "/backtest",       label: "Backtest",       icon: BarChart2    },
-  { href: "/announcements",  label: "Announcements",  icon: Bell         },
+  // { href: "/announcements",  label: "Announcements",  icon: Bell         },  // disabled — NSE scraping too heavy
   { href: "/quadrant",       label: "Market Quadrant", icon: Layers       },
   { href: "/sectors",        label: "Sectors",        icon: Grid         },
   { href: "/architecture",   label: "System Map",     icon: Network      },

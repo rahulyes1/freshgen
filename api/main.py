@@ -1062,17 +1062,8 @@ async def scan_history(limit: int = Query(30)):
 
 @app.get("/announcements")
 async def get_announcements(days: int = Query(7, ge=1, le=30)):
-    """
-    Return NSE corporate announcements (results, concalls, board meetings)
-    for the last N days. Filtered for relevance, sorted newest first.
-    Cached 30 minutes.
-    """
-    loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        executor,
-        lambda: __import__("fundamentals").get_all_announcements(days),
-    )
-    return {"announcements": data, "count": len(data), "days": days}
+    """Disabled — NSE scraping is too resource-heavy for personal use."""
+    return {"announcements": [], "count": 0, "days": days}
 
 
 # ── Sector Performance ─────────────────────────────────────────
