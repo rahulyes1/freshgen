@@ -1,0 +1,33 @@
+# Environment — never commit credentials
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Data — SQLite DB and Kite instrument cache live on the server
+data/
+*.db
+*.sqlite
+
+# Next.js
+dashboard/.next/
+dashboard/node_modules/
+dashboard/.env.local
+
+# Scanner output CSVs
+output/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

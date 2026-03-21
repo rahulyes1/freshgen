@@ -1,0 +1,14 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+aiosqlite>=0.20.0
+apscheduler>=3.10.4
+python-telegram-bot>=21.0
+python-dotenv>=1.0.0
+pytz>=2024.1
+yfinance>=0.2.40
+pandas>=2.0.0
+numpy>=1.26.0
+kiteconnect>=5.0.1
+playwright>=1.44.0
+pyotp>=2.9.0
+requests>=2.31.0
