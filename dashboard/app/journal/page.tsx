@@ -274,7 +274,7 @@ function AddTradeForm({ onSave, onClose }: { onSave: (d: any) => Promise<void>; 
             <label className="block text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</label>
             {type === "select"
               ? <select value={(f as any)[key]} onChange={e => setF(v => ({ ...v, [key]: e.target.value }))} className="w-full rounded-lg px-2.5 py-1.5 text-xs" style={{ backgroundColor: "var(--bg-primary)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
-                  <option>BREAKOUT</option><option>EP</option><option>VCP</option><option>SA</option><option>EMERGING</option>
+                  <option>BREAKOUT</option><option>EP</option><option>VCP</option><option>SA</option><option>EMERGING</option><option>S2HIGH</option>
                 </select>
               : <input type={type} step={type === "number" ? "0.01" : undefined} placeholder={placeholder}
                        value={(f as any)[key]} onChange={e => setF(v => ({ ...v, [key]: e.target.value }))}

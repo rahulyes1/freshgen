@@ -215,6 +215,7 @@ def run_screener(
 
         # Pattern bonus (max 10 pts)
         if pattern == "EP" and vol >= 2.5:    score += 10  # Strong EP
+        elif pattern == "S2HIGH":              score += 9   # Stage-2 + 52wH = leadership
         elif pattern == "SA":                  score += 8   # Supply absorption = smart money
         elif pattern == "VCP":                 score += 7   # Minervini quality
         elif pattern == "BREAKOUT":            score += 5

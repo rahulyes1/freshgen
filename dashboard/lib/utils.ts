@@ -32,7 +32,10 @@ export function pnlColor(value: number): string {
 }
 
 export function patternColor(pattern: string): string {
-  if (pattern === "EP")  return "bg-blue-500/20 text-blue-300 border-blue-500/40"
-  if (pattern === "VCP") return "bg-purple-500/20 text-purple-300 border-purple-500/40"
+  if (pattern === "EP")       return "bg-blue-500/20 text-blue-300 border-blue-500/40"
+  if (pattern === "VCP")      return "bg-purple-500/20 text-purple-300 border-purple-500/40"
+  if (pattern === "SA")       return "bg-amber-500/20 text-amber-300 border-amber-500/40"
+  if (pattern === "EMERGING") return "bg-gray-500/20 text-gray-300 border-gray-500/40"
+  if (pattern === "S2HIGH")   return "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
   return "bg-green-500/20 text-green-300 border-green-500/40"
 }

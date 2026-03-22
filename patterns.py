@@ -20,7 +20,7 @@ class Setup:
     """A trading setup signal."""
     ticker: str
     date: pd.Timestamp
-    pattern: Literal["BREAKOUT", "EP", "VCP", "SA", "EMERGING"]
+    pattern: Literal["BREAKOUT", "EP", "VCP", "SA", "EMERGING", "S2HIGH"]
     signal_price: float          # Close of the signal bar
     entry_price: float           # Intended entry (next open or signal close)
     initial_stop: float          # Initial stop-loss level
@@ -538,6 +538,118 @@ def find_supply_absorption_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
     return setups
 
 
+def find_stage2_high_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
+    """
+    S2HIGH — Stage-2 stocks hitting new 52-week highs.
+
+    This is the classic momentum leadership scan:
+    1. Stage-2 confirmed: Close > SMA50 > SMA150 > SMA200 (all rising)
+    2. Making new 52-week high (or within 1% of it)
+    3. Not extended: pullback from high ≤5% (healthy, not chasing)
+    4. Volume confirmation: above-average volume on the new high day
+    5. Orderly advance: no gap-downs >3% in last 20 bars (clean trend)
+
+    These are the market leaders — when the market turns bullish,
+    these are the first stocks to buy.
+    """
+    setups = []
+    n = len(df)
+
+    for i in range(252, n):
+        row = df.iloc[i]
+
+        # ── Filter 1: Full Stage-2 structure ─────────────────
+        # Close > SMA50 > SMA150 (InUptrend covers this)
+        if not row.get("InUptrend", False):
+            continue
+
+        sma50 = row.get("SMA50")
+        sma150 = row.get("SMA150") if "SMA150" in df.columns else None
+
+        if sma50 is None or pd.isna(sma50):
+            continue
+
+        # SMA50 must be rising (slope positive over 20 bars)
+        sma50_20ago = df["SMA50"].iloc[i - 20] if i >= 20 else sma50
+        if pd.isna(sma50_20ago) or sma50 <= sma50_20ago:
+            continue
+
+        # SMA150 must be rising too (if available)
+        if sma150 is not None and not pd.isna(sma150):
+            sma150_20ago = df["SMA150"].iloc[i - 20] if "SMA150" in df.columns and i >= 20 else sma150
+            if not pd.isna(sma150_20ago) and sma150 <= sma150_20ago:
+                continue
+
+        # ── Filter 2: At or near 52-week high ────────────────
+        high_52w = row.get("High52W", 0)
+        if high_52w <= 0 or pd.isna(high_52w):
+            continue
+
+        distance_from_high = (high_52w - row["Close"]) / high_52w
+        if distance_from_high > 0.02:
+            continue  # Must be within 2% of 52-week high
+
+        # ── Filter 3: Today's high IS the new 52-week high ──
+        # (or yesterday's — fresh breakout to new highs)
+        prev_high_52w = df["High52W"].iloc[i - 1] if i >= 1 else high_52w
+        if row["High"] < prev_high_52w * 0.99:
+            continue  # Not actually making a new high
+
+        # ── Filter 4: Volume above average ───────────────────
+        vol_ratio = row.get("VolRatio", 0)
+        if vol_ratio < 1.0:
+            continue  # At least average volume on the new high day
+
+        # ── Filter 5: Clean trend — no distribution ──────────
+        if "GapPct" in df.columns:
+            recent_gaps = df["GapPct"].iloc[max(0, i - 20):i]
+            if (recent_gaps < -0.03).sum() > 0:
+                continue  # Gap-down in last 20 bars = distribution
+
+        # ── Filter 6: Not over-extended from 50-SMA ──────────
+        extension = (row["Close"] - sma50) / sma50
+        if extension > 0.15:
+            continue  # More than 15% above SMA50 = too extended, wait for pullback
+
+        # ── Compute stops and risk ────────────────────────────
+        entry = row["Close"]
+
+        # Stop: 10-day low or 3× ATR below entry, whichever is tighter
+        atr14 = row.get("ATR14", 0)
+        low_10d = df["Low"].iloc[max(0, i - 10):i].min()
+        atr_stop = entry - (3.0 * atr14) if atr14 and not pd.isna(atr14) else low_10d
+
+        initial_stop = max(low_10d, atr_stop)
+        hard_stop = entry * (1 - cfg.STOP_MAX_PCT)
+        stop = max(initial_stop, hard_stop)
+        risk_pct = (entry - stop) / entry
+
+        if risk_pct < 0.01 or risk_pct > cfg.STOP_MAX_PCT * 1.01:
+            continue
+
+        # Extension info for notes
+        ext_pct = round(extension * 100, 1)
+
+        setups.append(Setup(
+            ticker=ticker,
+            date=df.index[i],
+            pattern="S2HIGH",
+            signal_price=row["Close"],
+            entry_price=entry,
+            initial_stop=initial_stop,
+            hard_stop=hard_stop,
+            stop_price=stop,
+            risk_pct=risk_pct,
+            volume_ratio=vol_ratio,
+            base_high=high_52w,
+            base_low=initial_stop,
+            base_days=0,
+            notes=f"S2HIGH: New 52wH | {ext_pct}% above SMA50 | Vol {vol_ratio:.1f}x",
+        ))
+
+    return setups
+
+
 def find_emerging_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
     """
     EMERGING — Pre-breakout watchlist candidates.
@@ -624,13 +736,14 @@ def find_emerging_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
 
 
 def find_all_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
-    """Find Breakout, EP, VCP, SA, and Emerging setups, sorted by date."""
+    """Find Breakout, EP, VCP, SA, Emerging, and S2HIGH setups, sorted by date."""
     breakouts = find_breakout_setups(df, ticker)
     eps = find_ep_setups(df, ticker)
     vcps = find_vcp_setups(df, ticker)
     sas = find_supply_absorption_setups(df, ticker)
     emerging = find_emerging_setups(df, ticker)
-    all_setups = breakouts + eps + vcps + sas + emerging
+    s2highs = find_stage2_high_setups(df, ticker)
+    all_setups = breakouts + eps + vcps + sas + emerging + s2highs
     all_setups.sort(key=lambda s: s.date)
     return all_setups
 

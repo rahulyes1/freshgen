@@ -15,7 +15,7 @@ export default function SetupsPage() {
   const { add } = usePositions()
   const [addSetup,   setAddSetup]   = useState<Setup | null>(null)
   const [chartSetup, setChartSetup] = useState<Setup | null>(null)
-  const [filter,     setFilter]     = useState<"ALL" | "BREAKOUT" | "EP" | "VCP" | "SA" | "EMERGING">("ALL")
+  const [filter,     setFilter]     = useState<"ALL" | "BREAKOUT" | "EP" | "VCP" | "SA" | "EMERGING" | "S2HIGH">("ALL")
 
   const { data: health } = useSWR("health", fetchHealth, { refreshInterval: 60_000 })
 
@@ -70,7 +70,7 @@ export default function SetupsPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            {(["ALL","BREAKOUT","EP","VCP","SA","EMERGING"] as const).map(f => (
+            {(["ALL","BREAKOUT","EP","VCP","SA","EMERGING","S2HIGH"] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
                       className="px-3 py-1 rounded-full text-xs font-medium transition-all"
                       style={{
@@ -83,6 +83,7 @@ export default function SetupsPage() {
                   : f === "VCP" ? <><BarChart size={9} className="inline mr-0.5" />VCP</>
                   : f === "SA" ? <><Activity size={9} className="inline mr-0.5" />SA</>
                   : f === "EMERGING" ? <><Clock size={9} className="inline mr-0.5" />Watch</>
+                  : f === "S2HIGH" ? <><TrendingUp size={9} className="inline mr-0.5" />S2High</>
                   : <><TrendingUp size={9} className="inline mr-0.5" />Breakout</>}
               </button>
             ))}

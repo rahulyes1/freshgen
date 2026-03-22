@@ -1,5 +1,5 @@
 "use client"
-import { TrendingUp, Zap, ChevronUp, AlertTriangle, BarChart } from "lucide-react"
+import { TrendingUp, Zap, ChevronUp, AlertTriangle, BarChart, Activity, Clock } from "lucide-react"
 import type { Setup } from "@/lib/types"
 import { cn, formatINR, patternColor } from "@/lib/utils"
 
@@ -33,8 +33,12 @@ export default function SetupCard({ setup, onAddPosition }: Props) {
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border", patternColor(setup.pattern))}>
-            {isEP ? <Zap size={10} className="inline mr-1" /> : isVCP ? <BarChart size={10} className="inline mr-1" /> : <TrendingUp size={10} className="inline mr-1" />}
-            {setup.pattern}
+            {isEP ? <Zap size={10} className="inline mr-1" />
+              : isVCP ? <BarChart size={10} className="inline mr-1" />
+              : setup.pattern === "SA" ? <Activity size={10} className="inline mr-1" />
+              : setup.pattern === "EMERGING" ? <Clock size={10} className="inline mr-1" />
+              : <TrendingUp size={10} className="inline mr-1" />}
+            {setup.pattern === "S2HIGH" ? "S2High" : setup.pattern}
           </span>
           {rsRank > 0 && (
             <span className="text-xs px-1.5 py-0.5 rounded"
