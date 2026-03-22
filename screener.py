@@ -102,7 +102,7 @@ def run_screener(
     tickers: list[str],
     lookback_days: int = 350,
     fresh_bars: int = 5,
-    check_earnings: bool = False,
+    check_earnings: bool = True,
 ) -> pd.DataFrame:
     """
     Screen a list of tickers for live setups.

@@ -15,7 +15,7 @@ export default function SetupsPage() {
   const { add } = usePositions()
   const [addSetup,   setAddSetup]   = useState<Setup | null>(null)
   const [chartSetup, setChartSetup] = useState<Setup | null>(null)
-  const [filter,     setFilter]     = useState<"ALL" | "BREAKOUT" | "EP" | "VCP">("ALL")
+  const [filter,     setFilter]     = useState<"ALL" | "BREAKOUT" | "EP" | "VCP" | "SA">("ALL")
 
   const { data: health } = useSWR("health", fetchHealth, { refreshInterval: 60_000 })
 
@@ -70,7 +70,7 @@ export default function SetupsPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            {(["ALL","BREAKOUT","EP","VCP"] as const).map(f => (
+            {(["ALL","BREAKOUT","EP","VCP","SA"] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
                       className="px-3 py-1 rounded-full text-xs font-medium transition-all"
                       style={{

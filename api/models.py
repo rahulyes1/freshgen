@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class SetupSchema(BaseModel):
     ticker: str
     date: str
-    pattern: Literal["BREAKOUT", "EP", "VCP"]
+    pattern: Literal["BREAKOUT", "EP", "VCP", "SA"]
     entry_price: float
     stop_price: float
     risk_pct: float

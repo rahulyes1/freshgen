@@ -35,6 +35,16 @@ EP_GAP_MIN = 0.04               # Minimum gap-up = 4%
 EP_VOLUME_MULTIPLIER = 2.0      # Volume must be 2x average
 EP_CLOSE_IN_TOP_HALF = True     # Must close in top 50% of the day's range
 
+# ── Supply Absorption (Demand Thrust + Pullback Absorption) ──
+SA_THRUST_LOOKBACK = 40         # Look back N bars for a demand thrust
+SA_THRUST_VOL_MULT = 2.0       # Thrust bar volume >= 2x avg (institutional buying)
+SA_THRUST_MOVE_MIN = 0.04      # Thrust move: ≥4% gain in thrust window
+SA_PULLBACK_DAYS_MIN = 5       # Min pullback duration (1 week)
+SA_PULLBACK_DAYS_MAX = 25      # Max pullback duration (5 weeks)
+SA_PULLBACK_DEPTH_MAX = 0.10   # Max pullback depth: 10% from thrust high
+SA_PULLBACK_VOL_DECLINE = 0.70 # Pullback avg volume ≤ 70% of thrust avg volume
+SA_ABSORPTION_RANGE_MAX = 0.06 # Final tight range ≤ 6% (supply drying up)
+
 # ── Entry ──────────────────────────────────────────────────────
 ENTRY_ON_NEXT_OPEN = True       # True = buy next open, False = buy same-day close
 

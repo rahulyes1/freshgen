@@ -1,7 +1,7 @@
 export interface Setup {
   ticker: string
   date: string
-  pattern: "BREAKOUT" | "EP" | "VCP"
+  pattern: "BREAKOUT" | "EP" | "VCP" | "SA"
   entry_price: number
   stop_price: number
   risk_pct: number

@@ -20,7 +20,7 @@ class Setup:
     """A trading setup signal."""
     ticker: str
     date: pd.Timestamp
-    pattern: Literal["BREAKOUT", "EP", "VCP"]
+    pattern: Literal["BREAKOUT", "EP", "VCP", "SA"]
     signal_price: float          # Close of the signal bar
     entry_price: float           # Intended entry (next open or signal close)
     initial_stop: float          # Initial stop-loss level
@@ -227,7 +227,7 @@ def find_ep_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
         sma50 = row.get("SMA50")
         if sma50 is None or pd.isna(sma50):
             continue
-        if row["Close"] < sma50 * 0.90:  # allow 10% tolerance for EPs starting trends
+        if row["Close"] < sma50 * 0.95:  # allow 5% tolerance for EPs starting trends
             continue
 
         # ── Filter 5: No recent gap-up in last 15 bars ───────
@@ -336,7 +336,7 @@ def find_vcp_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
         for k in range(1, len(contractions)):
             prev_range = contractions[k - 1]["range_pct"]
             this_range = contractions[k]["range_pct"]
-            if prev_range <= 0 or this_range > prev_range * 0.80:
+            if prev_range <= 0 or this_range > prev_range * 0.70:
                 valid = False
                 break
         if not valid:
@@ -390,12 +390,160 @@ def find_vcp_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
     return setups
 
 
+def find_supply_absorption_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
+    """
+    Supply Absorption (SA) — Demand thrust followed by orderly pullback on drying volume.
+
+    Concept (from Nitin's framework):
+    "Supply absorption preceded by recent high-volume demand expansion
+     in an orderly stage-2 structure"
+
+    Detection logic:
+    1. Stage-2: Close > rising SMA50 > SMA150 (orderly uptrend)
+    2. Demand thrust: a recent window with ≥4% gain on ≥2× volume (institutional buying)
+    3. Pullback absorption: price pulls back 1-5 weeks on DECLINING volume
+       → sellers drying up, supply being absorbed
+    4. Tight range at end of pullback (≤6%) — coiling before next move
+    5. Close reclaims above 10-EMA (buyers stepping back in)
+    """
+    setups = []
+    n = len(df)
+
+    for i in range(200, n):
+        row = df.iloc[i]
+
+        # ── Filter 1: Stage-2 uptrend (strict) ───────────────
+        if not row.get("InUptrend", False):
+            continue
+
+        # Rising SMA50 (slope positive over last 10 bars)
+        sma50_now = row.get("SMA50")
+        if sma50_now is None or pd.isna(sma50_now):
+            continue
+        sma50_10ago = df["SMA50"].iloc[i - 10] if i >= 10 else sma50_now
+        if pd.isna(sma50_10ago) or sma50_now <= sma50_10ago:
+            continue  # SMA50 must be rising
+
+        # ── Filter 2: Near 52-week high ──────────────────────
+        if not row.get("Near52WHigh", False):
+            continue
+
+        # ── Filter 3: Recent demand thrust in lookback window ─
+        thrust_lookback = cfg.SA_THRUST_LOOKBACK
+        thrust_found = False
+        thrust_end = 0
+        thrust_high = 0.0
+        thrust_vol_avg = 0.0
+
+        # Search for a high-volume thrust move ending 5-25 bars ago
+        for pb_len in range(cfg.SA_PULLBACK_DAYS_MIN, min(cfg.SA_PULLBACK_DAYS_MAX + 1, i - thrust_lookback)):
+            thrust_end_idx = i - pb_len
+            thrust_start_idx = max(0, thrust_end_idx - thrust_lookback)
+
+            if thrust_start_idx < 60:
+                continue
+
+            thrust_close_start = df["Close"].iloc[thrust_start_idx]
+            thrust_close_end = df["Close"].iloc[thrust_end_idx]
+
+            if thrust_close_start <= 0:
+                continue
+
+            thrust_gain = (thrust_close_end - thrust_close_start) / thrust_close_start
+            if thrust_gain < cfg.SA_THRUST_MOVE_MIN:
+                continue
+
+            # Check for at least 2 high-volume bars in the thrust window
+            thrust_vol = df["VolRatio"].iloc[thrust_start_idx:thrust_end_idx + 1]
+            hv_bars = (thrust_vol >= cfg.SA_THRUST_VOL_MULT).sum()
+            if hv_bars < 2:
+                continue
+
+            thrust_found = True
+            thrust_end = thrust_end_idx
+            thrust_high = df["High"].iloc[thrust_start_idx:thrust_end_idx + 1].max()
+            thrust_vol_avg = df["Volume"].iloc[thrust_start_idx:thrust_end_idx + 1].mean()
+            break
+
+        if not thrust_found:
+            continue
+
+        # ── Filter 4: Pullback on declining volume ────────────
+        pb_start = thrust_end + 1
+        pb_end = i  # today
+        pb_len_actual = pb_end - pb_start
+
+        if pb_len_actual < cfg.SA_PULLBACK_DAYS_MIN:
+            continue
+
+        pb_low = df["Low"].iloc[pb_start:pb_end].min()
+        pb_depth = (thrust_high - pb_low) / thrust_high if thrust_high > 0 else 1.0
+
+        if pb_depth > cfg.SA_PULLBACK_DEPTH_MAX:
+            continue  # Pulled back too deep — not orderly
+
+        # Volume decline: pullback volume should be ≤70% of thrust volume
+        pb_vol_avg = df["Volume"].iloc[pb_start:pb_end].mean()
+        if thrust_vol_avg > 0 and pb_vol_avg > cfg.SA_PULLBACK_VOL_DECLINE * thrust_vol_avg:
+            continue  # Volume NOT declining enough — supply not absorbed
+
+        # ── Filter 5: Tight range at end of pullback ──────────
+        last_5 = df.iloc[max(pb_start, i - 5):i]
+        if len(last_5) < 3:
+            continue
+        tight_high = last_5["High"].max()
+        tight_low = last_5["Low"].min()
+        tight_range = (tight_high - tight_low) / tight_low if tight_low > 0 else 1.0
+
+        if tight_range > cfg.SA_ABSORPTION_RANGE_MAX:
+            continue  # Not tight enough — supply still present
+
+        # ── Filter 6: Close reclaims 10-EMA (buyers stepping in) ──
+        ema10 = row.get("EMA10")
+        if ema10 is None or pd.isna(ema10):
+            continue
+        if row["Close"] < ema10:
+            continue  # Still below short-term trend — not ready
+
+        # ── Compute stops and risk ────────────────────────────
+        entry = row["Close"]
+        initial_stop = pb_low  # Below the pullback low
+        hard_stop = entry * (1 - cfg.STOP_MAX_PCT)
+        stop = max(initial_stop, hard_stop)
+        risk_pct = (entry - stop) / entry
+
+        if risk_pct < 0.01 or risk_pct > cfg.STOP_MAX_PCT * 1.01:
+            continue
+
+        vol_ratio = row.get("VolRatio", 0)
+
+        setups.append(Setup(
+            ticker=ticker,
+            date=df.index[i],
+            pattern="SA",
+            signal_price=row["Close"],
+            entry_price=entry,
+            initial_stop=initial_stop,
+            hard_stop=hard_stop,
+            stop_price=stop,
+            risk_pct=risk_pct,
+            volume_ratio=vol_ratio,
+            base_high=thrust_high,
+            base_low=pb_low,
+            base_days=pb_len_actual,
+            notes=f"SA thrust +{thrust_gain*100:.0f}% → pullback {pb_depth*100:.0f}% depth, vol decline {pb_vol_avg/thrust_vol_avg*100:.0f}%",
+        ))
+
+    return setups
+
+
 def find_all_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
-    """Find both Breakout and EP setups and return them combined, sorted by date."""
+    """Find Breakout, EP, VCP, and Supply Absorption setups, sorted by date."""
     breakouts = find_breakout_setups(df, ticker)
     eps = find_ep_setups(df, ticker)
     vcps = find_vcp_setups(df, ticker)
-    all_setups = breakouts + eps + vcps
+    sas = find_supply_absorption_setups(df, ticker)
+    all_setups = breakouts + eps + vcps + sas
     all_setups.sort(key=lambda s: s.date)
     return all_setups
 
