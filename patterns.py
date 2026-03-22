@@ -20,7 +20,7 @@ class Setup:
     """A trading setup signal."""
     ticker: str
     date: pd.Timestamp
-    pattern: Literal["BREAKOUT", "EP", "VCP", "SA"]
+    pattern: Literal["BREAKOUT", "EP", "VCP", "SA", "EMERGING"]
     signal_price: float          # Close of the signal bar
     entry_price: float           # Intended entry (next open or signal close)
     initial_stop: float          # Initial stop-loss level
@@ -33,6 +33,7 @@ class Setup:
     base_days: int = 0           # Length of base in trading days
     gap_pct: float = 0.0         # Gap-up % (EP only)
     notes: str = ""
+    grade: str = ""              # A/B/C quality grade (filled by screener)
 
 
 def _find_consolidation_base(df: pd.DataFrame, i: int) -> tuple[float, float, int] | None:
@@ -227,7 +228,7 @@ def find_ep_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
         sma50 = row.get("SMA50")
         if sma50 is None or pd.isna(sma50):
             continue
-        if row["Close"] < sma50 * 0.95:  # allow 5% tolerance for EPs starting trends
+        if row["Close"] < sma50 * 0.90:  # allow 10% tolerance for EPs starting trends
             continue
 
         # ── Filter 5: No recent gap-up in last 15 bars ───────
@@ -336,7 +337,7 @@ def find_vcp_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
         for k in range(1, len(contractions)):
             prev_range = contractions[k - 1]["range_pct"]
             this_range = contractions[k]["range_pct"]
-            if prev_range <= 0 or this_range > prev_range * 0.70:
+            if prev_range <= 0 or this_range > prev_range * 0.80:
                 valid = False
                 break
         if not valid:
@@ -537,13 +538,99 @@ def find_supply_absorption_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
     return setups
 
 
+def find_emerging_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
+    """
+    EMERGING — Pre-breakout watchlist candidates.
+
+    Stocks that are 80% ready but haven't triggered yet:
+    - In uptrend, near 52-week high
+    - Forming a tight base (valid consolidation found)
+    - Volume drying up (below average) — coiling
+    - BUT no breakout yet (close still inside base)
+
+    Purpose: alert you 1-2 days BEFORE the breakout so you're prepared.
+    """
+    setups = []
+    n = len(df)
+
+    for i in range(cfg.CONSOLIDATION_DAYS_MIN + 60, n):
+        # Only check the last bar (today)
+        if i < n - 1:
+            continue
+
+        row = df.iloc[i]
+
+        # Must be in uptrend
+        if not row.get("InUptrend", False):
+            continue
+
+        # Must be near 52-week high
+        if not row.get("Near52WHigh", False):
+            continue
+
+        # Volume should be BELOW average (quiet, coiling)
+        vol_ratio = row.get("VolRatio", 0)
+        if vol_ratio > 1.0:
+            continue  # Volume is above avg — not coiling yet
+
+        # Must have a valid consolidation base
+        base_result = _find_consolidation_base(df, i)
+        if base_result is None:
+            continue
+
+        base_high, base_low, base_days = base_result
+
+        # Close must be INSIDE or just below the base high (not broken out yet)
+        if row["Close"] >= base_high:
+            continue  # Already broken out — not emerging, it's a breakout
+
+        # Must be within 3% of base high (close to breakout)
+        distance_to_breakout = (base_high - row["Close"]) / base_high
+        if distance_to_breakout > 0.03:
+            continue  # Too far from breakout level
+
+        # ATR contraction check — volatility should be contracting
+        atr_now = row.get("ATR14", 0)
+        atr_20ago = df["ATR14"].iloc[i - 20] if i >= 20 else atr_now
+        if pd.notna(atr_now) and pd.notna(atr_20ago) and atr_20ago > 0:
+            if atr_now > atr_20ago:
+                continue  # Volatility expanding, not contracting
+
+        entry = base_high  # Projected entry = base high (breakout level)
+        stop = max(base_low, entry * (1 - cfg.STOP_MAX_PCT))
+        risk_pct = (entry - stop) / entry if entry > 0 else 0
+
+        if risk_pct < 0.01 or risk_pct > cfg.STOP_MAX_PCT * 1.01:
+            continue
+
+        setups.append(Setup(
+            ticker=ticker,
+            date=df.index[i],
+            pattern="EMERGING",
+            signal_price=row["Close"],
+            entry_price=round(entry, 2),
+            initial_stop=base_low,
+            hard_stop=entry * (1 - cfg.STOP_MAX_PCT),
+            stop_price=stop,
+            risk_pct=risk_pct,
+            volume_ratio=vol_ratio,
+            base_high=base_high,
+            base_low=base_low,
+            base_days=base_days,
+            notes=f"EMERGING: {distance_to_breakout*100:.1f}% from breakout | Vol drying {vol_ratio:.1f}x | ATR contracting",
+        ))
+
+    return setups
+
+
 def find_all_setups(df: pd.DataFrame, ticker: str) -> list[Setup]:
-    """Find Breakout, EP, VCP, and Supply Absorption setups, sorted by date."""
+    """Find Breakout, EP, VCP, SA, and Emerging setups, sorted by date."""
     breakouts = find_breakout_setups(df, ticker)
     eps = find_ep_setups(df, ticker)
     vcps = find_vcp_setups(df, ticker)
     sas = find_supply_absorption_setups(df, ticker)
-    all_setups = breakouts + eps + vcps + sas
+    emerging = find_emerging_setups(df, ticker)
+    all_setups = breakouts + eps + vcps + sas + emerging
     all_setups.sort(key=lambda s: s.date)
     return all_setups
 

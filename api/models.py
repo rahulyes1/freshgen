@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class SetupSchema(BaseModel):
     ticker: str
     date: str
-    pattern: Literal["BREAKOUT", "EP", "VCP", "SA"]
+    pattern: Literal["BREAKOUT", "EP", "VCP", "SA", "EMERGING"]
     entry_price: float
     stop_price: float
     risk_pct: float
@@ -26,6 +26,9 @@ class SetupSchema(BaseModel):
     revenue_yoy: float = 0.0
     has_announcement: bool = False
     strong_catalyst: bool = False
+    # Quality grading + regime sizing
+    grade: str = ""                    # A/B/C quality grade
+    regime_size_pct: float = 1.0       # Regime-aware sizing multiplier (1.0 = full, 0.5 = half)
     # Computed by API layer
     position_size_shares: int = 0
     position_value: float = 0.0

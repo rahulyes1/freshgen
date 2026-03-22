@@ -93,6 +93,8 @@ def screen_ticker(df: pd.DataFrame, ticker: str, lookback_bars: int = 5,
             "revenue_yoy":       0.0,
             "has_announcement":  False,
             "strong_catalyst":   False,
+            "grade":             "",     # filled by run_screener after grading
+            "regime_size_pct":   1.0,    # filled by run_screener (regime-aware sizing multiplier)
         })
 
     return rows
@@ -175,8 +177,124 @@ def run_screener(
     except Exception as fe:
         print(f"  Fundamentals enrichment failed (non-fatal): {fe}")
 
-    # Sort by RS rank descending (best outperformers first)
-    result = result.sort_values("rs_rank", ascending=False).reset_index(drop=True)
+    # ── A/B/C Grading ─────────────────────────────────────────
+    # Grade every setup based on quality factors. Never blocks — just ranks.
+    #   A = High conviction: RS>80, volume>2x, tight base, near 52wH
+    #   B = Solid: RS 50-80, volume>1.5x, decent structure
+    #   C = Watchlist: weaker RS or loose structure, still valid pattern
+    print("  Grading setups…")
+
+    def _grade_row(row):
+        score = 0
+        rs = row.get("rs_rank", 0)
+        vol = row.get("volume_ratio", 0)
+        dist = row.get("distance_52w_pct", 100)
+        risk = row.get("risk_pct", 10)
+        pattern = row.get("pattern", "")
+
+        # RS strength (max 30 pts)
+        if rs >= 90:    score += 30
+        elif rs >= 80:  score += 25
+        elif rs >= 70:  score += 20
+        elif rs >= 50:  score += 10
+
+        # Volume conviction (max 20 pts)
+        if vol >= 3.0:    score += 20
+        elif vol >= 2.0:  score += 15
+        elif vol >= 1.5:  score += 10
+
+        # Proximity to 52-week high (max 15 pts)
+        if dist <= 5:     score += 15
+        elif dist <= 10:  score += 10
+        elif dist <= 15:  score += 5
+
+        # Tight risk (max 15 pts)
+        if risk <= 3:     score += 15
+        elif risk <= 5:   score += 10
+        elif risk <= 7:   score += 5
+
+        # Pattern bonus (max 10 pts)
+        if pattern == "EP" and vol >= 2.5:    score += 10  # Strong EP
+        elif pattern == "SA":                  score += 8   # Supply absorption = smart money
+        elif pattern == "VCP":                 score += 7   # Minervini quality
+        elif pattern == "BREAKOUT":            score += 5
+
+        # Catalyst bonus (max 10 pts)
+        if row.get("strong_catalyst"):   score += 10
+        elif row.get("has_announcement"): score += 5
+
+        # Earnings penalty
+        if row.get("near_earnings"):     score -= 10
+
+        # EMERGING is always C (watchlist)
+        if pattern == "EMERGING":
+            return "C"
+
+        if score >= 65:   return "A"
+        elif score >= 40: return "B"
+        else:             return "C"
+
+    result["grade"] = result.apply(_grade_row, axis=1)
+
+    # ── Regime-Aware Position Sizing ──────────────────────────
+    # Doesn't block setups — adjusts recommended size.
+    # regime_size_pct: 1.0 = full size, 0.5 = half, 0.25 = quarter
+    print("  Applying regime-aware sizing…")
+    try:
+        from api.database import get_market_cache, get_connection
+        import asyncio
+
+        async def _get_quadrant():
+            conn = await get_connection()
+            try:
+                cached = await get_market_cache(conn, "quadrant")
+                return cached.get("data", {}) if cached else {}
+            finally:
+                await conn.close()
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                quadrant = {}  # Can't await in running loop, skip
+            else:
+                quadrant = loop.run_until_complete(_get_quadrant())
+        except RuntimeError:
+            quadrant = {}
+
+        overall = quadrant.get("overall", "SELECTIVE")
+        swing_conf = quadrant.get("swing_confidence", 50)
+
+        if overall == "INVEST" and swing_conf >= 60:
+            base_mult = 1.0   # Full size — easy money market
+        elif overall == "INVEST":
+            base_mult = 0.75  # Good market but not perfect momentum
+        elif overall == "SELECTIVE":
+            base_mult = 0.50  # Selective — half size, pick only A grades
+        else:  # CASH
+            base_mult = 0.25  # Hard market — quarter size, only the best
+
+        # Adjust per grade
+        def _regime_size(row):
+            grade = row.get("grade", "C")
+            if grade == "A":
+                return min(base_mult * 1.25, 1.0)  # A-grade gets a boost, capped at 1.0
+            elif grade == "B":
+                return base_mult
+            else:  # C or EMERGING
+                return base_mult * 0.5
+
+        result["regime_size_pct"] = result.apply(_regime_size, axis=1)
+        print(f"  Regime: {overall} | Swing confidence: {swing_conf} | Base size: {base_mult*100:.0f}%")
+
+    except Exception as re:
+        print(f"  Regime sizing skipped (non-fatal): {re}")
+        result["regime_size_pct"] = 1.0
+
+    # Sort by grade (A first), then RS rank descending
+    grade_order = {"A": 0, "B": 1, "C": 2}
+    result["_grade_sort"] = result["grade"].map(grade_order)
+    result = result.sort_values(["_grade_sort", "rs_rank"], ascending=[True, False]).reset_index(drop=True)
+    result = result.drop(columns=["_grade_sort"])
     return result
 
 

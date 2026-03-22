@@ -1,7 +1,7 @@
 export interface Setup {
   ticker: string
   date: string
-  pattern: "BREAKOUT" | "EP" | "VCP" | "SA"
+  pattern: "BREAKOUT" | "EP" | "VCP" | "SA" | "EMERGING"
   entry_price: number
   stop_price: number
   risk_pct: number
@@ -18,6 +18,8 @@ export interface Setup {
   revenue_yoy: number
   has_announcement: boolean
   strong_catalyst: boolean
+  grade: string
+  regime_size_pct: number
   position_size_shares: number
   position_value: number
   risk_amount: number
