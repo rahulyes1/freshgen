@@ -143,6 +143,12 @@ export async function refreshMarketQuadrant(): Promise<void> {
   await request("/market-quadrant/refresh", { method: "POST" })
 }
 
+// ── Momentum ─────────────────────────────────────────────────
+
+export async function fetchMomentum(): Promise<import("./types").MomentumResponse> {
+  return request<import("./types").MomentumResponse>("/momentum")
+}
+
 // ── Health ────────────────────────────────────────────────────
 
 export async function fetchHealth(): Promise<import("./types").HealthResponse> {

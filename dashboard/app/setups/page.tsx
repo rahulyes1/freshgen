@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { RefreshCw, AlertCircle, Zap, TrendingUp, BarChart2, Database, TrendingDown, BarChart, Clock, Activity } from "lucide-react"
+import { RefreshCw, AlertCircle, Zap, TrendingUp, BarChart2, Database, TrendingDown, BarChart, Clock, Activity, Copy, Check } from "lucide-react"
 import { useSetups } from "@/hooks/useSetups"
 import { usePositions } from "@/hooks/usePositions"
 import SetupCard from "@/components/setups/SetupCard"
@@ -16,10 +16,18 @@ export default function SetupsPage() {
   const [addSetup,   setAddSetup]   = useState<Setup | null>(null)
   const [chartSetup, setChartSetup] = useState<Setup | null>(null)
   const [filter,     setFilter]     = useState<"ALL" | "BREAKOUT" | "EP" | "VCP" | "SA" | "EMERGING" | "S2HIGH">("ALL")
+  const [copied,     setCopied]     = useState(false)
 
   const { data: health } = useSWR("health", fetchHealth, { refreshInterval: 60_000 })
 
   const filtered = setups.filter(s => filter === "ALL" || (s.patterns || s.pattern).includes(filter))
+
+  const copyForTV = () => {
+    const tickers = [...new Set(filtered.map(s => "NSE:" + s.ticker.replace(".NS", "")))]
+    navigator.clipboard.writeText(tickers.join(","))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -88,6 +96,14 @@ export default function SetupsPage() {
               </button>
             ))}
           </div>
+          {filtered.length > 0 && (
+            <button onClick={copyForTV}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                    style={{ backgroundColor: copied ? "rgba(0,196,154,0.2)" : "rgba(48,54,61,0.6)", color: copied ? "var(--green)" : "var(--text-muted)", border: `1px solid ${copied ? "rgba(0,196,154,0.4)" : "var(--border)"}` }}>
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? "Copied!" : "TradingView"}
+            </button>
+          )}
           <button onClick={() => refresh()}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors"
                   style={{ backgroundColor: "rgba(48,54,61,0.6)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
@@ -129,7 +145,7 @@ export default function SetupsPage() {
               {/* Chart button overlay */}
               <button
                 onClick={() => setChartSetup(s)}
-                className="absolute top-3 right-14 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg"
+                className="absolute top-3 right-14 opacity-70 hover:opacity-100 transition-opacity p-1.5 rounded-lg"
                 style={{ backgroundColor: "rgba(77,159,255,0.15)", color: "var(--blue)", border: "1px solid rgba(77,159,255,0.3)" }}
                 title="View chart">
                 <BarChart2 size={12} />

@@ -304,3 +304,21 @@ export interface ScanHistoryEntry {
   duration_s: number
   created_at: string
 }
+
+export interface MomentumLeader {
+  ticker: string
+  close: number
+  rs_rank: number
+  distance_52w_pct: number
+  above_sma50: boolean
+  above_sma200: boolean
+  volume_ratio: number
+  atr14: number
+  sector: string
+}
+
+export interface MomentumResponse {
+  leaders: MomentumLeader[]
+  count: number
+  cached: boolean
+}

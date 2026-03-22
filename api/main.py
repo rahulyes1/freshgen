@@ -729,6 +729,18 @@ async def scan_history(limit: int = Query(30)):
         return await get_scan_history(conn, limit)
 
 
+# ── Momentum Leaders ─────────────────────────────────────────
+
+@app.get("/momentum")
+async def get_momentum():
+    async with db() as conn:
+        cached = await get_market_cache(conn, "momentum_leaders")
+        if not cached:
+            return {"leaders": [], "count": 0, "cached": False}
+        data = cached.get("data", {})
+        return {"leaders": data.get("leaders", []), "count": data.get("count", 0), "cached": True}
+
+
 # ── Announcements (disabled) ─────────────────────────────────
 
 @app.get("/announcements")

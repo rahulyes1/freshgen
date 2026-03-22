@@ -335,6 +335,8 @@ async def save_scan_results(
     conn: aiosqlite.Connection, scan_date: str, setups: list[dict],
     duration_s: float, universe_sz: int,
 ) -> None:
+    # Clear previous scan results for this date to avoid duplicates
+    await conn.execute("DELETE FROM scan_results WHERE scan_date = ?", (scan_date,))
     await conn.execute(
         "INSERT INTO scan_runs (scan_date, total_found, universe_sz, duration_s) VALUES (?, ?, ?, ?)",
         (scan_date, len(setups), universe_sz, duration_s),

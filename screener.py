@@ -145,6 +145,39 @@ def _dedup_and_merge(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _compute_momentum_leaders(rs_raw_scores, all_ticker_data, n_percentile):
+    """Compute top momentum stocks from scan data."""
+    leaders = []
+    for ticker, data in all_ticker_data.items():
+        rs_raw = rs_raw_scores.get(ticker, 0)
+        rs_rank = n_percentile(rs_raw)
+        close = data.get("close", 0)
+        sma50 = data.get("sma50")
+        sma150 = data.get("sma150")
+        above_50 = close > sma50 if sma50 else False
+        above_150 = close > sma150 if sma150 else False
+
+        if rs_rank < 75 or not above_50:
+            continue
+
+        leaders.append({
+            "ticker": ticker,
+            "rs_rank": rs_rank,
+            "close": round(close, 2),
+            "sma50": round(sma50, 2) if sma50 else None,
+            "sma150": round(sma150, 2) if sma150 else None,
+            "above_50": above_50,
+            "above_150": above_150,
+            "return_1m": round(data.get("ret_1m", 0) * 100, 1),
+            "return_3m": round(data.get("ret_3m", 0) * 100, 1),
+            "volume_ratio": round(data.get("vol_ratio", 1), 1),
+            "dist_52w_pct": round(data.get("dist_52w", 0) * 100, 1),
+        })
+
+    leaders.sort(key=lambda x: x["rs_rank"], reverse=True)
+    return leaders[:50]
+
+
 def run_screener(
     tickers: list[str],
     lookback_days: int = 450,
@@ -161,6 +194,7 @@ def run_screener(
 
     all_rows = []
     rs_raw_scores: dict[str, float] = {}
+    all_ticker_data: dict[str, dict] = {}
     total = len(tickers)
 
     for i, ticker in enumerate(tickers, 1):
@@ -174,6 +208,17 @@ def run_screener(
 
         # RS raw score for ALL tickers (not just setups) for accurate percentile ranking
         rs_raw_scores[ticker] = compute_rs_raw(df_ind)
+
+        # Collect ticker data for momentum leaders
+        all_ticker_data[ticker] = {
+            "close": float(df_ind["Close"].iloc[-1]),
+            "sma50": float(df_ind["SMA50"].iloc[-1]) if pd.notna(df_ind["SMA50"].iloc[-1]) else None,
+            "sma150": float(df_ind["SMA150"].iloc[-1]) if pd.notna(df_ind["SMA150"].iloc[-1]) else None,
+            "ret_1m": (float(df_ind["Close"].iloc[-1]) - float(df_ind["Close"].iloc[-21])) / float(df_ind["Close"].iloc[-21]) if len(df_ind) > 21 else 0,
+            "ret_3m": (float(df_ind["Close"].iloc[-1]) - float(df_ind["Close"].iloc[-63])) / float(df_ind["Close"].iloc[-63]) if len(df_ind) > 63 else 0,
+            "vol_ratio": float(df_ind["VolRatio"].iloc[-1]) if pd.notna(df_ind["VolRatio"].iloc[-1]) else 1.0,
+            "dist_52w": (float(df_ind["High52W"].iloc[-1]) - float(df_ind["Close"].iloc[-1])) / float(df_ind["High52W"].iloc[-1]) if pd.notna(df_ind["High52W"].iloc[-1]) else 0,
+        }
 
         rows = screen_ticker(df_ind, ticker, lookback_bars=fresh_bars, indicators_added=True)
         if rows:
@@ -347,6 +392,31 @@ def run_screener(
     result["_grade_sort"] = result["grade"].map(grade_order)
     result = result.sort_values(["_grade_sort", "rs_rank"], ascending=[True, False]).reset_index(drop=True)
     result = result.drop(columns=["_grade_sort"])
+
+    # Cache momentum leaders
+    print("  Computing momentum leaders…")
+    momentum = _compute_momentum_leaders(rs_raw_scores, all_ticker_data, _percentile)
+    try:
+        import asyncio as _aio
+        from api.database import get_connection, set_market_cache
+        async def _save_momentum():
+            conn = await get_connection()
+            try:
+                await set_market_cache(conn, "momentum_leaders", {"leaders": momentum, "count": len(momentum)})
+            finally:
+                await conn.close()
+        try:
+            loop = _aio.get_event_loop()
+            if loop.is_running():
+                pass  # Skip in running loop
+            else:
+                loop.run_until_complete(_save_momentum())
+        except RuntimeError:
+            pass
+        print(f"  Cached {len(momentum)} momentum leaders")
+    except Exception as me:
+        print(f"  Momentum cache failed (non-fatal): {me}")
+
     return result
 
 
