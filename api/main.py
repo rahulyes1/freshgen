@@ -417,7 +417,7 @@ async def get_chart(ticker: str, days: int = Query(120, ge=30, le=365)):
             pass
         import yfinance as yf
         import numpy as np
-        df = yf.download(ticker, period=f"{days + 60}d", auto_adjust=True, progress=False)
+        df = yf.download(ticker, period=f"{days + 220}d", auto_adjust=True, progress=False)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         if df.empty:
