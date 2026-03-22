@@ -8,13 +8,25 @@ interface Props {
   onAddPosition?: (s: Setup) => void
 }
 
+function patternIcon(p: string) {
+  if (p === "EP")       return <Zap size={10} className="inline mr-0.5" />
+  if (p === "VCP")      return <BarChart size={10} className="inline mr-0.5" />
+  if (p === "SA")       return <Activity size={10} className="inline mr-0.5" />
+  if (p === "EMERGING") return <Clock size={10} className="inline mr-0.5" />
+  return <TrendingUp size={10} className="inline mr-0.5" />
+}
+
+function patternLabel(p: string) {
+  if (p === "S2HIGH") return "S2High"
+  return p
+}
+
 export default function SetupCard({ setup, onAddPosition }: Props) {
-  const isEP    = setup.pattern === "EP"
-  const isVCP   = setup.pattern === "VCP"
   const riskPct = setup.risk_pct.toFixed(1)
   const volRatio = setup.volume_ratio.toFixed(1)
   const ticker  = setup.ticker.replace(".NS", "")
   const rsRank  = setup.rs_rank ?? 0
+  const allPatterns = (setup.patterns || setup.pattern).split(", ").filter(Boolean)
 
   return (
     <div
@@ -32,14 +44,13 @@ export default function SetupCard({ setup, onAddPosition }: Props) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full border", patternColor(setup.pattern))}>
-            {isEP ? <Zap size={10} className="inline mr-1" />
-              : isVCP ? <BarChart size={10} className="inline mr-1" />
-              : setup.pattern === "SA" ? <Activity size={10} className="inline mr-1" />
-              : setup.pattern === "EMERGING" ? <Clock size={10} className="inline mr-1" />
-              : <TrendingUp size={10} className="inline mr-1" />}
-            {setup.pattern === "S2HIGH" ? "S2High" : setup.pattern}
-          </span>
+          <div className="flex flex-wrap justify-end gap-1">
+            {allPatterns.map(p => (
+              <span key={p} className={cn("text-xs font-semibold px-2 py-0.5 rounded-full border", patternColor(p))}>
+                {patternIcon(p)}{patternLabel(p)}
+              </span>
+            ))}
+          </div>
           {rsRank > 0 && (
             <span className="text-xs px-1.5 py-0.5 rounded"
                   style={{
@@ -79,8 +90,8 @@ export default function SetupCard({ setup, onAddPosition }: Props) {
       {/* Meta tags */}
       <div className="flex flex-wrap gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
         <Tag label={`52W dist ${setup.distance_52w_pct.toFixed(1)}%`} />
-        {isEP && setup.gap_pct > 0 && <Tag label={`Gap +${setup.gap_pct.toFixed(1)}%`} highlight />}
-        {!isEP && setup.base_weeks !== "-" && <Tag label={`Base ${setup.base_weeks}w`} />}
+        {allPatterns.includes("EP") && setup.gap_pct > 0 && <Tag label={`Gap +${setup.gap_pct.toFixed(1)}%`} highlight />}
+        {!allPatterns.includes("EP") && setup.base_weeks !== "-" && <Tag label={`Base ${setup.base_weeks}w`} />}
         {setup.near_earnings && (
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
                 style={{ backgroundColor: "rgba(255,180,0,0.12)", color: "rgb(255,180,0)", border: "1px solid rgba(255,180,0,0.3)" }}>

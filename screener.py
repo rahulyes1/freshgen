@@ -84,6 +84,7 @@ def screen_ticker(df: pd.DataFrame, ticker: str, lookback_bars: int = 5,
             "base_weeks":        round(s.base_days / 5, 1) if s.base_days > 0 else "-",
             "gap_pct":           round(s.gap_pct * 100, 2) if s.gap_pct else 0.0,
             "atr14":             round(atr14, 2),
+            "patterns":          s.pattern,  # single pattern; merged by _dedup_and_merge later
             "rs_rank":           0,    # filled in by run_screener after universe ranking
             "near_earnings":     False, # filled in by run_screener
             # Fundamentals — filled in by run_screener after setup detection
@@ -98,6 +99,50 @@ def screen_ticker(df: pd.DataFrame, ticker: str, lookback_bars: int = 5,
         })
 
     return rows
+
+
+def _dedup_and_merge(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Dedup & merge: produce one row per ticker with all detected patterns.
+
+    Step 1: Per ticker+pattern, keep only the row with the most recent date.
+    Step 2: Per ticker, merge multiple pattern rows into a single row.
+      - patterns: list of all unique patterns (e.g. ["BREAKOUT", "S2HIGH"])
+      - pattern:  primary pattern (the one with the best grade / highest score)
+      - grade:    best grade among merged rows (A > B > C)
+      - entry/stop/risk: from the primary pattern row
+      - volume_ratio: max across all patterns
+      - Other fields: from the primary row (same ticker = same RS, earnings, etc.)
+    """
+    if df.empty:
+        return df
+
+    grade_rank = {"A": 0, "B": 1, "C": 2}
+
+    # Step 1: Per ticker+pattern, keep only the most recent date
+    df = df.copy()
+    df["_date_sort"] = pd.to_datetime(df["date"])
+    df = df.sort_values("_date_sort", ascending=False)
+    df = df.drop_duplicates(subset=["ticker", "pattern"], keep="first")
+    df = df.drop(columns=["_date_sort"])
+
+    # Step 2: Per ticker, merge all rows into one
+    merged_rows = []
+    for ticker, group in df.groupby("ticker", sort=False):
+        group = group.sort_values("grade", key=lambda s: s.map(grade_rank))
+        primary = group.iloc[0]  # Best grade row = primary
+        all_patterns = group["pattern"].unique().tolist()
+
+        row = primary.to_dict()
+        row["patterns"] = ", ".join(all_patterns)   # "BREAKOUT, S2HIGH"
+        row["volume_ratio"] = group["volume_ratio"].max()
+        row["gap_pct"] = group["gap_pct"].max()
+        # Use most recent date across all patterns
+        row["date"] = group["date"].max()
+        merged_rows.append(row)
+
+    result = pd.DataFrame(merged_rows)
+    return result
 
 
 def run_screener(
@@ -291,6 +336,12 @@ def run_screener(
         print(f"  Regime sizing skipped (non-fatal): {re}")
         result["regime_size_pct"] = 1.0
 
+    # ── Dedup & Merge: One row per ticker ──────────────────────
+    # 1. Per ticker+pattern, keep only the most recent signal date
+    # 2. Per ticker, merge all patterns into one row with combined labels
+    print("  Deduplicating & merging setups…")
+    result = _dedup_and_merge(result)
+
     # Sort by grade (A first), then RS rank descending
     grade_order = {"A": 0, "B": 1, "C": 2}
     result["_grade_sort"] = result["grade"].map(grade_order)
@@ -317,7 +368,8 @@ def print_screener_results(df: pd.DataFrame) -> None:
         position_value = shares * row["entry_price"]
         earnings_flag = " ⚠️ EARNINGS SOON" if row.get("near_earnings") else ""
 
-        print(f"\n  [{row['pattern']}] {row['ticker']}  —  {row['date']}  RS:{row.get('rs_rank',0)}{earnings_flag}")
+        patterns_label = row.get('patterns', row['pattern'])
+        print(f"\n  [{patterns_label}] {row['ticker']}  —  {row['date']}  RS:{row.get('rs_rank',0)}{earnings_flag}")
         print(f"  Entry:      ₹{row['entry_price']:.2f}   Stop: ₹{row['stop_price']:.2f}   Risk: {row['risk_pct']:.1f}%")
         print(f"  Volume:     {row['volume_ratio']:.1f}x avg", end="")
         if row['gap_pct']:

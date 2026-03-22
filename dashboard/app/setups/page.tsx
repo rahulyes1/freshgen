@@ -19,7 +19,7 @@ export default function SetupsPage() {
 
   const { data: health } = useSWR("health", fetchHealth, { refreshInterval: 60_000 })
 
-  const filtered = setups.filter(s => filter === "ALL" || s.pattern === filter)
+  const filtered = setups.filter(s => filter === "ALL" || (s.patterns || s.pattern).includes(filter))
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">

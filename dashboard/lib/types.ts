@@ -2,6 +2,7 @@ export interface Setup {
   ticker: string
   date: string
   pattern: "BREAKOUT" | "EP" | "VCP" | "SA" | "EMERGING" | "S2HIGH"
+  patterns: string   // All detected patterns, comma-separated (e.g. "BREAKOUT, S2HIGH")
   entry_price: number
   stop_price: number
   risk_pct: number
