@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { RefreshCw, AlertCircle, Zap, TrendingUp, BarChart2, Database, TrendingDown, BarChart, Clock } from "lucide-react"
+import { RefreshCw, AlertCircle, Zap, TrendingUp, BarChart2, Database, TrendingDown, BarChart, Clock, Activity } from "lucide-react"
 import { useSetups } from "@/hooks/useSetups"
 import { usePositions } from "@/hooks/usePositions"
 import SetupCard from "@/components/setups/SetupCard"
@@ -81,6 +81,7 @@ export default function SetupsPage() {
                 {f === "ALL" ? "All"
                   : f === "EP" ? <><Zap size={9} className="inline mr-0.5" />EP</>
                   : f === "VCP" ? <><BarChart size={9} className="inline mr-0.5" />VCP</>
+                  : f === "SA" ? <><Activity size={9} className="inline mr-0.5" />SA</>
                   : <><TrendingUp size={9} className="inline mr-0.5" />Breakout</>}
               </button>
             ))}
