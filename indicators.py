@@ -42,12 +42,12 @@ def volume_sma(df: pd.DataFrame, period: int = 50) -> pd.Series:
 
 def rolling_high(df: pd.DataFrame, period: int, col: str = "High") -> pd.Series:
     """Rolling maximum of High over last `period` bars."""
-    return df[col].rolling(period, min_periods=period).max()
+    return df[col].rolling(period, min_periods=min(200, period)).max()
 
 
 def rolling_low(df: pd.DataFrame, period: int, col: str = "Low") -> pd.Series:
     """Rolling minimum of Low over last `period` bars."""
-    return df[col].rolling(period, min_periods=period).min()
+    return df[col].rolling(period, min_periods=min(200, period)).min()
 
 
 def rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:

@@ -104,7 +104,7 @@ async def run_daily_scan() -> None:
 
     try:
         tickers = get_full_universe()
-        df = run_screener(tickers, lookback_days=350, fresh_bars=5)
+        df = run_screener(tickers, lookback_days=450, fresh_bars=5)
         setups = df.to_dict(orient="records") if not df.empty else []
         duration = round(time.time() - t0, 1)
         print(f"[Scheduler] Morning scan: {len(setups)} setups from {len(tickers)} tickers in {duration}s")
@@ -240,7 +240,7 @@ async def run_afterclose_scan() -> None:
 
     try:
         tickers = get_full_universe()
-        df = run_screener(tickers, lookback_days=350, fresh_bars=1)
+        df = run_screener(tickers, lookback_days=450, fresh_bars=1)
         setups = df.to_dict(orient="records") if not df.empty else []
         duration = round(time.time() - t0, 1)
         print(f"[Scheduler] After-close scan: {len(setups)} setups from {len(tickers)} tickers in {duration}s")

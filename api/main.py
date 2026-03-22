@@ -232,7 +232,7 @@ def _run_scan_background(universe: str, fresh_bars: int) -> None:
     print(f"[BG Scan] Starting {universe} scan ({len(tickers)} tickers) for {today}…")
     t0 = time.time()
     try:
-        df = run_screener(tickers, lookback_days=350, fresh_bars=fresh_bars)
+        df = run_screener(tickers, lookback_days=450, fresh_bars=fresh_bars)
         setups_raw = df.to_dict(orient="records") if not df.empty else []
         duration = round(time.time() - t0, 1)
 
@@ -308,7 +308,7 @@ async def scan(
     t0 = time.time()
     loop = asyncio.get_event_loop()
     df = await loop.run_in_executor(
-        executor, lambda: run_screener(tickers, lookback_days=350, fresh_bars=fresh_bars),
+        executor, lambda: run_screener(tickers, lookback_days=450, fresh_bars=fresh_bars),
     )
     duration = round(time.time() - t0, 1)
     setups_raw = df.to_dict(orient="records") if not df.empty else []

@@ -102,7 +102,7 @@ def screen_ticker(df: pd.DataFrame, ticker: str, lookback_bars: int = 5,
 
 def run_screener(
     tickers: list[str],
-    lookback_days: int = 350,
+    lookback_days: int = 450,
     fresh_bars: int = 5,
     check_earnings: bool = True,
 ) -> pd.DataFrame:
