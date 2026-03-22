@@ -199,9 +199,12 @@ export default function SystemMapPage() {
             "→",
             "Telegram",
           ].map((step, i) => (
-            <span key={i} style={{ color: step === "→" ? "var(--border)" : "var(--text-primary)" }}
+            <span key={i}
                   className={step !== "→" ? "px-2 py-1 rounded" : ""}
-                  {...(step !== "→" ? { style: { backgroundColor: "rgba(48,54,61,0.6)", border: "1px solid var(--border)", color: "var(--text-primary)" } } : {})}>
+                  style={step !== "→"
+                    ? { backgroundColor: "rgba(48,54,61,0.6)", border: "1px solid var(--border)", color: "var(--text-primary)" }
+                    : { color: "var(--border)" }
+                  }>
               {step}
             </span>
           ))}
